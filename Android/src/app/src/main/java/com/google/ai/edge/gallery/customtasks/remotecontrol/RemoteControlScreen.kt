@@ -16,13 +16,9 @@
 
 package com.google.ai.edge.gallery.customtasks.remotecontrol
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
-import android.media.projection.MediaProjectionManager
 import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -53,22 +49,8 @@ fun RemoteControlScreen(
   viewModel: RemoteControlViewModel = hiltViewModel(),
 ) {
   val context = LocalContext.current
-  val mediaProjectionManager =
-    context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
   LaunchedEffect(model) { viewModel.setModel(model) }
-
-  val captureLauncher =
-    rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-      if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-        val intent = Intent(context, ScreenCaptureService::class.java).apply {
-          putExtra("resultCode", result.resultCode)
-          putExtra("resultData", result.data)
-        }
-        context.startForegroundService(intent)
-        context.startService(Intent(context, RemoteControlOverlayService::class.java))
-      }
-    }
 
   Column(modifier = Modifier.padding(16.dp)) {
     Text(stringResource(R.string.remote_control_title), style = MaterialTheme.typography.titleLarge)
@@ -76,7 +58,7 @@ fun RemoteControlScreen(
     Text(stringResource(R.string.remote_control_intro))
     Spacer(modifier = Modifier.height(8.dp))
     Text(
-      "Note: Screen recording permission is required to allow the local AI to \"see\" and analyze the screen. Your data stays on your device.",
+      "Note: Accessibility and Overlay permissions are required to allow the local AI to \"see\" and control the screen. Your data stays on your device.",
       style = MaterialTheme.typography.bodySmall,
       color = MaterialTheme.colorScheme.onSurfaceVariant
     )
@@ -111,7 +93,7 @@ fun RemoteControlScreen(
 
     Button(
       onClick = {
-        captureLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+        context.startService(Intent(context, RemoteControlOverlayService::class.java))
       },
       enabled = modelInitialized
     ) {
@@ -121,7 +103,6 @@ fun RemoteControlScreen(
     Spacer(modifier = Modifier.height(8.dp))
 
     Button(onClick = {
-      context.stopService(Intent(context, ScreenCaptureService::class.java))
       context.stopService(Intent(context, RemoteControlOverlayService::class.java))
     }) {
       Text(stringResource(R.string.remote_control_stop))

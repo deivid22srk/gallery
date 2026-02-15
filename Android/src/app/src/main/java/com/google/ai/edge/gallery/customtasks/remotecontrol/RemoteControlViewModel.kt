@@ -22,10 +22,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 
 @HiltViewModel
-class RemoteControlViewModel @Inject constructor() : ViewModel() {
-  val processing = RemoteControlAIEngine.processing
+class RemoteControlViewModel @Inject constructor(
+  private val aiEngine: RemoteControlAIEngine
+) : ViewModel() {
+  val isProcessing = aiEngine.isProcessing
+  val status = aiEngine.status
 
   fun setModel(model: Model) {
-    RemoteControlAIEngine.initialize(model)
+    aiEngine.setModel(model)
   }
 }

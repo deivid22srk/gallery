@@ -33,7 +33,6 @@
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <uses-feature
         android:name="android.hardware.camera"
@@ -139,12 +138,6 @@
             android:name=".customtasks.remotecontrol.RemoteControlOverlayService"
             android:enabled="true"
             android:exported="false" />
-
-        <service
-            android:name=".customtasks.remotecontrol.ScreenCaptureService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
 
         <uses-native-library android:name="libvndksupport.so" android:required="false"/>
         <uses-native-library android:name="libOpenCL.so" android:required="false"/>

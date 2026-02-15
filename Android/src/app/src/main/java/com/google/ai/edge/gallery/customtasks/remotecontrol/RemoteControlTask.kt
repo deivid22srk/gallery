@@ -28,16 +28,15 @@ import com.google.ai.edge.gallery.data.BuiltInTaskId
 import com.google.ai.edge.gallery.data.Category
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.Task
-import com.google.ai.edge.gallery.ui.llmchat.LlmChatModelHelper
-import com.google.ai.edge.litertlm.Contents
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 
 /**
  * A custom task that allows an AI to control the device via accessibility gestures and screen capture.
  */
-class RemoteControlTask @Inject constructor() : CustomTask {
-  private val tools = listOf(RemoteControlTools())
+class RemoteControlTask @Inject constructor(
+    private val aiEngine: RemoteControlAIEngine
+) : CustomTask {
 
   override val task =
     Task(
@@ -56,30 +55,9 @@ class RemoteControlTask @Inject constructor() : CustomTask {
     model: Model,
     onDone: (String) -> Unit,
   ) {
-    LlmChatModelHelper.initialize(
-      context = context,
-      model = model,
-      supportImage = true,
-      supportAudio = false,
-      onDone = { error ->
-        if (error.isEmpty()) {
-          RemoteControlAIEngine.initialize(model)
-        }
-        onDone(error)
-      },
-      systemInstruction =
-        Contents.of(
-          "You are a focused AI assistant that controls an Android phone. " +
-            "Execute user tasks by strictly using tool calls. " +
-            "You will receive screenshots. Analyze them and use 'click', 'swipe', 'scroll', 'goBack', or 'goHome'. " +
-            "IMPORTANT: Coordinates for 'click' and 'swipe' are 0-100 (percentage of screen width/height). " +
-            "(0,0) is top-left, (100,100) is bottom-right. " +
-            "Do not engage in casual conversation. Do not explain your actions. " +
-            "Just call the necessary tools to achieve the goal. " +
-            "If the task requires multiple steps, call one tool at a time."
-        ),
-      tools = tools,
-    )
+    // Delegate to aiEngine to avoid double loading
+    aiEngine.setModel(model)
+    onDone("")
   }
 
   override fun cleanUpModelFn(
@@ -88,7 +66,8 @@ class RemoteControlTask @Inject constructor() : CustomTask {
     model: Model,
     onDone: () -> Unit,
   ) {
-    LlmChatModelHelper.cleanUp(model = model, onDone = onDone)
+    // Model cleanup handled by RemoteControlAIEngine or system
+    onDone()
   }
 
   @Composable
