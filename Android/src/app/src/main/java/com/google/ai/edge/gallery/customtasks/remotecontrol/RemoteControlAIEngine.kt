@@ -83,28 +83,32 @@ class RemoteControlAIEngine @Inject constructor(
   """.trimIndent()
 
   /** Sets the model to be used for inference. */
-  fun setModel(model: Model) {
-    if (currentModel?.name == model.name && model.instance != null) return
+  fun setModel(model: Model, onDone: (String) -> Unit = {}) {
+    if (currentModel?.name == model.name && model.instance != null) {
+      onDone("")
+      return
+    }
 
     currentModel = model
     _status.value = "Model set: ${model.name}"
 
     // Model initialization is now handled by RemoteControlTask or on-demand
     if (model.instance == null) {
+      scope.launch(Dispatchers.IO) {
         LlmChatModelHelper.initialize(
-            context = context,
-            model = model,
-            supportImage = true,
-            supportAudio = false,
-            onDone = { error ->
-                if (error.isEmpty()) {
-                    _status.value = "Model Loaded"
-                } else {
-                    _status.value = "Error: $error"
-                }
-            },
-            systemInstruction = Contents.of(systemPrompt)
+          context = context,
+          model = model,
+          supportImage = true,
+          supportAudio = false,
+          onDone = { error ->
+            _status.value = if (error.isEmpty()) "Model Loaded" else "Error: $error"
+            onDone(error)
+          },
+          systemInstruction = Contents.of(systemPrompt)
         )
+      }
+    } else {
+      onDone("")
     }
   }
 
@@ -136,11 +140,12 @@ class RemoteControlAIEngine @Inject constructor(
         var lastResponse = ""
 
         while (step < 10 && !lastResponse.contains("[DONE]")) {
-          val screenshot = captureScreenshot()
-          if (screenshot == null) {
-            _status.value = "Error: Screenshot failed"
+          val result = captureScreenshot()
+          if (result is RemoteControlAccessibilityService.CaptureResult.Error) {
+            _status.value = "Error: ${result.message}"
             break
           }
+          val screenshot = (result as RemoteControlAccessibilityService.CaptureResult.Success).bitmap
 
           val response = processStep(model, if (step == 0) userPrompt else "Next step?", screenshot)
           lastResponse = response
@@ -149,7 +154,7 @@ class RemoteControlAIEngine @Inject constructor(
           executeTool(response)
 
           step++
-          withContext(Dispatchers.IO) { Thread.sleep(1200) } // Wait for UI update
+          kotlinx.coroutines.delay(1200) // Wait for UI update
         }
 
         if (lastResponse.contains("[DONE]")) {

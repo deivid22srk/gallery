@@ -39,20 +39,25 @@ class RemoteControlAccessibilityService : AccessibilityService() {
       private set
 
     /** Captures a fresh screenshot using Accessibility API, hiding the overlay temporarily. */
-    suspend fun captureScreenshot(): Bitmap? {
-      val service = instance ?: return null
+    suspend fun captureScreenshot(): CaptureResult {
+      val service = instance ?: return CaptureResult.Error("Accessibility Service not enabled. Please enable it in Settings.")
 
       // Hide floating UI
       RemoteControlOverlayService.setVisible(false)
-      delay(400) // Wait for UI to hide and system to refresh
+      delay(500) // Wait for UI to hide and system to refresh
 
-      val screenshot = service.takeAccessibilityScreenshot()
+      val result = service.takeAccessibilityScreenshot()
 
       // Show floating UI
       RemoteControlOverlayService.setVisible(true)
 
-      return screenshot
+      return result
     }
+  }
+
+  sealed class CaptureResult {
+    data class Success(val bitmap: Bitmap) : CaptureResult()
+    data class Error(val message: String) : CaptureResult()
   }
 
   override fun onServiceConnected() {
@@ -116,44 +121,54 @@ class RemoteControlAccessibilityService : AccessibilityService() {
   }
 
   /** Uses the Accessibility API to take a screenshot without requiring MediaProjection. */
-  private suspend fun takeAccessibilityScreenshot(): Bitmap? {
-    val deferred = CompletableDeferred<Bitmap?>()
+  private suspend fun takeAccessibilityScreenshot(): CaptureResult {
+    val deferred = CompletableDeferred<CaptureResult>()
 
-    // takeScreenshot is available from API 30.
-    takeScreenshot(
-      Display.DEFAULT_DISPLAY,
-      ContextCompat.getMainExecutor(this),
-      object : TakeScreenshotCallback {
-        override fun onSuccess(screenshot: ScreenshotResult) {
-          val hardwareBuffer = screenshot.hardwareBuffer
-          val bitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, screenshot.colorSpace)
-          hardwareBuffer.close()
+    try {
+      takeScreenshot(
+        Display.DEFAULT_DISPLAY,
+        ContextCompat.getMainExecutor(this),
+        object : TakeScreenshotCallback {
+          override fun onSuccess(screenshot: ScreenshotResult) {
+            val hardwareBuffer = screenshot.hardwareBuffer
+            val bitmap = Bitmap.wrapHardwareBuffer(hardwareBuffer, screenshot.colorSpace)
+            hardwareBuffer.close()
 
-          if (bitmap != null) {
-            // Convert hardware bitmap to software bitmap for analysis and scale it down.
-            val softwareBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
-            val scale = 0.5f
-            val scaled = Bitmap.createScaledBitmap(
-              softwareBitmap,
-              (softwareBitmap.width * scale).toInt(),
-              (softwareBitmap.height * scale).toInt(),
-              true
-            )
-            deferred.complete(scaled)
-          } else {
-            deferred.complete(null)
+            if (bitmap != null) {
+              // Convert hardware bitmap to software bitmap for analysis and scale it down.
+              val softwareBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, false)
+              val scale = 0.5f
+              val scaled = Bitmap.createScaledBitmap(
+                softwareBitmap,
+                (softwareBitmap.width * scale).toInt(),
+                (softwareBitmap.height * scale).toInt(),
+                true
+              )
+              deferred.complete(CaptureResult.Success(scaled))
+            } else {
+              deferred.complete(CaptureResult.Error("Failed to process captured bitmap."))
+            }
+          }
+
+          override fun onFailure(errorCode: Int) {
+            val reason = when (errorCode) {
+              AccessibilityService.ERROR_TAKESCREENSHOT_INTERNAL_ERROR -> "Internal error"
+              AccessibilityService.ERROR_TAKESCREENSHOT_NO_ACCESSIBILITY_ACCESS -> "No accessibility access"
+              AccessibilityService.ERROR_TAKESCREENSHOT_INTERVAL_TOO_SHORT -> "Capture interval too short"
+              AccessibilityService.ERROR_TAKESCREENSHOT_INVALID_DISPLAY -> "Invalid display"
+              else -> "Unknown error ($errorCode)"
+            }
+            Log.e(TAG, "Screenshot failed: $reason")
+            deferred.complete(CaptureResult.Error("Screenshot failed: $reason"))
           }
         }
-
-        override fun onFailure(errorCode: Int) {
-          Log.e(TAG, "Screenshot failed with error code: $errorCode")
-          deferred.complete(null)
-        }
-      }
-    )
-
-    return withTimeoutOrNull(3000) {
-      deferred.await()
+      )
+    } catch (e: Exception) {
+      return CaptureResult.Error("Exception during capture: ${e.localizedMessage}")
     }
+
+    return withTimeoutOrNull(5000) {
+      deferred.await()
+    } ?: CaptureResult.Error("Screenshot timed out.")
   }
 }

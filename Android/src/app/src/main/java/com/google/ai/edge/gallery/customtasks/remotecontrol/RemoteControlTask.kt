@@ -56,8 +56,7 @@ class RemoteControlTask @Inject constructor(
     onDone: (String) -> Unit,
   ) {
     // Delegate to aiEngine to avoid double loading
-    aiEngine.setModel(model)
-    onDone("")
+    aiEngine.setModel(model, onDone)
   }
 
   override fun cleanUpModelFn(
