@@ -66,7 +66,7 @@ fun RemoteControlScreen(
           putExtra("resultData", result.data)
         }
         context.startForegroundService(intent)
-        context.startService(Intent(context, FloatingControlService::class.java))
+        context.startService(Intent(context, RemoteControlOverlayService::class.java))
       }
     }
 
@@ -116,7 +116,7 @@ fun RemoteControlScreen(
 
     Button(onClick = {
       context.stopService(Intent(context, ScreenCaptureService::class.java))
-      context.stopService(Intent(context, FloatingControlService::class.java))
+      context.stopService(Intent(context, RemoteControlOverlayService::class.java))
     }) {
       Text(stringResource(R.string.remote_control_stop))
     }

@@ -82,18 +82,24 @@ object RemoteControlAIEngine {
       _response.value = "Thinking..."
       var fullResponse = ""
 
-      instance.conversation
-        .sendMessageAsync(Contents.of(contents))
-        .catch {
-          Log.e(TAG, "Inference failed", it)
-          _response.value = "Error: ${it.message}"
-        }
-        .onCompletion { _processing.value = false }
-        .collect {
-          fullResponse += it.toString()
-          _response.value = fullResponse
-          Log.d(TAG, "Model response: $it")
-        }
+      try {
+        instance.conversation
+          .sendMessageAsync(Contents.of(contents))
+          .catch {
+            Log.e(TAG, "Inference failed", it)
+            _response.value = "Error: ${it.message}"
+          }
+          .onCompletion { _processing.value = false }
+          .collect {
+            fullResponse += it.toString()
+            _response.value = fullResponse
+            Log.d(TAG, "Model response: $it")
+          }
+      } catch (e: Exception) {
+        Log.e(TAG, "Exception during sendMessageAsync", e)
+        _response.value = "Fatal Error: ${e.message}"
+        _processing.value = false
+      }
     }
   }
 

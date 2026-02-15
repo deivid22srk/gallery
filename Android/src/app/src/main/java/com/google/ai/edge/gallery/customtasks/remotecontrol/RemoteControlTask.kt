@@ -69,13 +69,12 @@ class RemoteControlTask @Inject constructor() : CustomTask {
       },
       systemInstruction =
         Contents.of(
-          "You are a helpful AI assistant with direct control over the user's Android phone. " +
-            "Your goal is to execute the user's requests by interacting with the screen. " +
-            "You will be provided with a screenshot of the current state of the phone. " +
-            "IMPORTANT: Always prioritize using the provided tools (click, swipe, scroll, goBack, goHome) " +
-            "to perform the requested task. Do not just describe what you would do; actually call the tools. " +
-            "If you need to search for an app, swipe between home screens or open the app drawer. " +
-            "After each action, you will receive a new screenshot of the updated state."
+          "You are a focused AI assistant that controls an Android phone. " +
+            "Execute user tasks by strictly using tool calls. " +
+            "You will receive screenshots. Analyze them and use 'click', 'swipe', 'scroll', 'goBack', or 'goHome'. " +
+            "IMPORTANT: Do not engage in casual conversation. Do not explain your actions. " +
+            "Just call the necessary tools to achieve the goal. " +
+            "If the task requires multiple steps, call one tool at a time."
         ),
       tools = tools,
     )

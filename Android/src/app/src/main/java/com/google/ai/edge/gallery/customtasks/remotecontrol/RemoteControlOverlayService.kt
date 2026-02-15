@@ -18,8 +18,11 @@ package com.google.ai.edge.gallery.customtasks.remotecontrol
 
 import android.annotation.SuppressLint
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.IBinder
@@ -35,25 +38,35 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /**
- * A service that displays a draggable floating overlay button and prompt input.
+ * A service that displays a draggable floating overlay button and visualizes AI gestures.
  * The overlay is invisible to screen recordings.
  */
-class FloatingControlService : Service() {
+class RemoteControlOverlayService : Service() {
 
   companion object {
-    private var instance: FloatingControlService? = null
+    private var instance: RemoteControlOverlayService? = null
 
     fun setVisible(visible: Boolean) {
       instance?.updateVisibility(visible)
+    }
+
+    fun showClick(x: Float, y: Float) {
+      instance?.visualizeClick(x, y)
+    }
+
+    fun showSwipe(x1: Float, y1: Float, x2: Float, y2: Float) {
+      instance?.visualizeSwipe(x1, y1, x2, y2)
     }
   }
 
   private lateinit var windowManager: WindowManager
   private var floatingView: View? = null
+  private var gestureView: GestureVisualizationView? = null
   private var isExpanded = false
   private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
 
@@ -62,10 +75,12 @@ class FloatingControlService : Service() {
     instance = this
     windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
     showFloatingButton()
+    showGestureOverlay()
   }
 
   private fun updateVisibility(visible: Boolean) {
     floatingView?.visibility = if (visible) View.VISIBLE else View.GONE
+    // We keep gesture overlay visible but empty most of the time.
   }
 
   @SuppressLint("ClickableViewAccessibility")
@@ -119,7 +134,7 @@ class FloatingControlService : Service() {
     }
 
     val editText = EditText(this).apply {
-      hint = "Ask AI to do something..."
+      hint = "Ask AI..."
       setHintTextColor(Color.LTGRAY)
       setTextColor(Color.WHITE)
       layoutParams = LinearLayout.LayoutParams(400, LinearLayout.LayoutParams.WRAP_CONTENT)
@@ -184,11 +199,9 @@ class FloatingControlService : Service() {
       if (prompt.isNotEmpty()) {
         RemoteControlAIEngine.processPrompt(prompt)
         editText.setText("")
-        // Keep expanded to see the response
       }
     }
 
-    // Collect AI responses
     serviceScope.launch {
       RemoteControlAIEngine.response.collect { response ->
         responseText.text = response
@@ -199,14 +212,91 @@ class FloatingControlService : Service() {
     windowManager.addView(mainLayout, params)
   }
 
+  private fun showGestureOverlay() {
+    val params = WindowManager.LayoutParams(
+      WindowManager.LayoutParams.MATCH_PARENT,
+      WindowManager.LayoutParams.MATCH_PARENT,
+      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+      WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+      WindowManager.LayoutParams.FLAG_SECURE or
+      WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+      PixelFormat.TRANSLUCENT
+    )
+
+    gestureView = GestureVisualizationView(this)
+    windowManager.addView(gestureView, params)
+  }
+
+  private fun visualizeClick(x: Float, y: Float) {
+    serviceScope.launch {
+      gestureView?.addClick(x, y)
+    }
+  }
+
+  private fun visualizeSwipe(x1: Float, y1: Float, x2: Float, y2: Float) {
+    serviceScope.launch {
+      gestureView?.addSwipe(x1, y1, x2, y2)
+    }
+  }
+
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onDestroy() {
     super.onDestroy()
     instance = null
     serviceScope.cancel()
-    if (floatingView != null) {
-      windowManager.removeView(floatingView)
+    if (floatingView != null) windowManager.removeView(floatingView)
+    if (gestureView != null) windowManager.removeView(gestureView)
+  }
+
+  /** View to draw temporary gesture visualizations. */
+  private class GestureVisualizationView(context: Context) : View(context) {
+    private val paint = Paint().apply {
+      color = Color.parseColor("#80FF0000") // Semi-transparent red
+      style = Paint.Style.STROKE
+      strokeWidth = 10f
+      isAntiAlias = true
+    }
+
+    private val fillPaint = Paint().apply {
+      color = Color.parseColor("#40FF0000") // More transparent red
+      style = Paint.Style.FILL
+      isAntiAlias = true
+    }
+
+    private var clickPoint: Pair<Float, Float>? = null
+    private var swipeLine: Triple<Pair<Float, Float>, Pair<Float, Float>, Float>? = null
+
+    fun addClick(x: Float, y: Float) {
+      clickPoint = x to y
+      invalidate()
+      postDelayed({
+        clickPoint = null
+        invalidate()
+      }, 1000)
+    }
+
+    fun addSwipe(x1: Float, y1: Float, x2: Float, y2: Float) {
+      swipeLine = Triple(x1 to y1, x2 to y2, 0f)
+      invalidate()
+      postDelayed({
+        swipeLine = null
+        invalidate()
+      }, 1500)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+      super.onDraw(canvas)
+      clickPoint?.let { (x, y) ->
+        canvas.drawCircle(x, y, 50f, fillPaint)
+        canvas.drawCircle(x, y, 50f, paint)
+      }
+      swipeLine?.let { (start, end, _) ->
+        canvas.drawLine(start.first, start.second, end.first, end.second, paint)
+        canvas.drawCircle(start.first, start.second, 20f, fillPaint)
+        canvas.drawCircle(end.first, end.second, 30f, paint)
+      }
     }
   }
 }

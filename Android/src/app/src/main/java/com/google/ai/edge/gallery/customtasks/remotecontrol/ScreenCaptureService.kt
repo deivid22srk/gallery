@@ -37,7 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * A foreground service that uses MediaProjection to capture screen frames efficiently.
+ * A foreground service that uses MediaProjection to capture screenshots on-demand.
  */
 class ScreenCaptureService : Service() {
 
@@ -57,13 +57,13 @@ class ScreenCaptureService : Service() {
       val service = instance ?: return lastScreenshot
 
       // Hide floating UI
-      FloatingControlService.setVisible(false)
-      delay(100) // Wait for UI to hide
+      RemoteControlOverlayService.setVisible(false)
+      delay(200) // Give UI time to hide
 
-      val screenshot = service.requestSingleCapture()
+      val screenshot = service.performSingleCapture()
 
       // Show floating UI
-      FloatingControlService.setVisible(true)
+      RemoteControlOverlayService.setVisible(true)
 
       if (screenshot != null) {
         lastScreenshot = screenshot
@@ -73,11 +73,8 @@ class ScreenCaptureService : Service() {
   }
 
   private var projection: MediaProjection? = null
-  private var imageReader: ImageReader? = null
-  private var virtualDisplay: VirtualDisplay? = null
   private var handlerThread: HandlerThread? = null
   private var handler: Handler? = null
-  private var captureDeferred: CompletableDeferred<Bitmap?>? = null
 
   override fun onCreate() {
     super.onCreate()
@@ -99,7 +96,6 @@ class ScreenCaptureService : Service() {
     if (resultCode != -1 && resultData != null) {
       val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
       projection = mediaProjectionManager.getMediaProjection(resultCode, resultData)
-      startCapture()
     } else {
       Log.e(TAG, "Invalid resultCode or resultData")
       stopSelf()
@@ -107,68 +103,66 @@ class ScreenCaptureService : Service() {
     return START_NOT_STICKY
   }
 
-  private fun startCapture() {
+  /** Performs a single capture by creating and destroying a VirtualDisplay. */
+  private suspend fun performSingleCapture(): Bitmap? {
+    val proj = projection ?: return null
     val metrics = resources.displayMetrics
-    val width = metrics.widthPixels
-    val height = metrics.heightPixels
+
+    // Use half resolution to keep it "pequeno" (small) and faster to process.
+    val scale = 0.5f
+    val width = (metrics.widthPixels * scale).toInt()
+    val height = (metrics.heightPixels * scale).toInt()
     val density = metrics.densityDpi
 
-    imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-    virtualDisplay =
-      projection?.createVirtualDisplay(
-        "ScreenCapture",
+    val deferred = CompletableDeferred<Bitmap?>()
+    var virtualDisplay: VirtualDisplay? = null
+
+    val imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 1)
+    imageReader.setOnImageAvailableListener({ reader ->
+      val image = reader.acquireLatestImage()
+      if (image != null) {
+        try {
+          val planes = image.planes
+          val buffer = planes[0].buffer
+          val pixelStride = planes[0].pixelStride
+          val rowStride = planes[0].rowStride
+          val rowPadding = rowStride - pixelStride * width
+
+          val bitmap = Bitmap.createBitmap(
+            width + rowPadding / pixelStride,
+            height,
+            Bitmap.Config.ARGB_8888,
+          )
+          bitmap.copyPixelsFromBuffer(buffer)
+          val result = Bitmap.createBitmap(bitmap, 0, 0, width, height)
+          deferred.complete(result)
+        } catch (e: Exception) {
+          Log.e(TAG, "Failed to process image", e)
+          deferred.complete(null)
+        } finally {
+          image.close()
+        }
+      }
+    }, handler)
+
+    try {
+      virtualDisplay = proj.createVirtualDisplay(
+        "CaptureDisplay",
         width,
         height,
         density,
         DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-        imageReader?.surface,
+        imageReader.surface,
         null,
-        handler,
+        handler
       )
 
-    imageReader?.setOnImageAvailableListener(
-      { reader ->
-        val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
-
-        val deferred = captureDeferred
-        if (deferred != null) {
-          try {
-            val planes = image.planes
-            val buffer = planes[0].buffer
-            val pixelStride = planes[0].pixelStride
-            val rowStride = planes[0].rowStride
-            val rowPadding = rowStride - pixelStride * width
-
-            val bitmap =
-              Bitmap.createBitmap(
-                width + rowPadding / pixelStride,
-                height,
-                Bitmap.Config.ARGB_8888,
-              )
-            bitmap.copyPixelsFromBuffer(buffer)
-
-            val croppedBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
-            deferred.complete(croppedBitmap)
-            captureDeferred = null
-          } catch (e: Exception) {
-            Log.e(TAG, "Failed to process screenshot", e)
-            deferred.complete(null)
-          } finally {
-            image.close()
-          }
-        } else {
-          image.close()
-        }
-      },
-      handler,
-    )
-  }
-
-  /** Requests a single capture. */
-  private suspend fun requestSingleCapture(): Bitmap? {
-    captureDeferred = CompletableDeferred()
-    return withTimeoutOrNull(2000) {
-      captureDeferred?.await()
+      return withTimeoutOrNull(2000) {
+        deferred.await()
+      }
+    } finally {
+      virtualDisplay?.release()
+      imageReader.close()
     }
   }
 
@@ -180,7 +174,7 @@ class ScreenCaptureService : Service() {
 
     return NotificationCompat.Builder(this, CHANNEL_ID)
       .setContentTitle("AI Remote Control")
-      .setContentText("Capturing screen for AI...")
+      .setContentText("Ready to capture screen for AI")
       .setSmallIcon(android.R.drawable.ic_menu_camera)
       .build()
   }
@@ -190,8 +184,6 @@ class ScreenCaptureService : Service() {
   override fun onDestroy() {
     Log.d(TAG, "Destroying ScreenCaptureService")
     instance = null
-    virtualDisplay?.release()
-    imageReader?.close()
     projection?.stop()
     handlerThread?.quitSafely()
     super.onDestroy()

@@ -24,8 +24,6 @@ import com.google.ai.edge.litertlm.ToolParam
  */
 class RemoteControlTools {
 
-  private fun isServiceConnected(): Boolean = RemoteControlAccessibilityService.instance != null
-
   @Tool(description = "Clicks on the screen at the specified coordinates (x, y). Coordinates are in pixels.")
   fun click(
     @ToolParam(description = "The x-coordinate in pixels.") x: Float,
@@ -35,6 +33,10 @@ class RemoteControlTools {
     if (service == null) {
       return mapOf("result" to "error", "message" to "Accessibility Service not connected")
     }
+
+    // Visualize first
+    RemoteControlOverlayService.showClick(x, y)
+
     service.click(x, y)
     return mapOf("result" to "success", "action" to "click", "x" to x.toString(), "y" to y.toString())
   }
@@ -51,6 +53,10 @@ class RemoteControlTools {
     if (service == null) {
       return mapOf("result" to "error", "message" to "Accessibility Service not connected")
     }
+
+    // Visualize first
+    RemoteControlOverlayService.showSwipe(x1, y1, x2, y2)
+
     service.swipe(x1, y1, x2, y2, duration.toLong())
     return mapOf("result" to "success", "action" to "swipe")
   }
@@ -84,12 +90,26 @@ class RemoteControlTools {
     if (service == null) {
       return mapOf("result" to "error", "message" to "Accessibility Service not connected")
     }
+
     // For simplicity, we implement scroll as a swipe in the opposite direction.
+    // Coordinates are rough estimates for visualization.
     when (direction.lowercase()) {
-      "up" -> service.swipe(500f, 800f, 500f, 200f)
-      "down" -> service.swipe(500f, 200f, 500f, 800f)
-      "left" -> service.swipe(800f, 500f, 200f, 500f)
-      "right" -> service.swipe(200f, 500f, 800f, 500f)
+      "up" -> {
+        RemoteControlOverlayService.showSwipe(500f, 800f, 500f, 200f)
+        service.swipe(500f, 800f, 500f, 200f)
+      }
+      "down" -> {
+        RemoteControlOverlayService.showSwipe(500f, 200f, 500f, 800f)
+        service.swipe(500f, 200f, 500f, 800f)
+      }
+      "left" -> {
+        RemoteControlOverlayService.showSwipe(800f, 500f, 200f, 500f)
+        service.swipe(800f, 500f, 200f, 500f)
+      }
+      "right" -> {
+        RemoteControlOverlayService.showSwipe(200f, 500f, 800f, 500f)
+        service.swipe(200f, 500f, 800f, 500f)
+      }
     }
     return mapOf("result" to "success", "action" to "scroll", "direction" to direction)
   }

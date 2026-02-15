@@ -136,7 +136,7 @@
         </service>
 
         <service
-            android:name=".customtasks.remotecontrol.FloatingControlService"
+            android:name=".customtasks.remotecontrol.RemoteControlOverlayService"
             android:enabled="true"
             android:exported="false" />
 
