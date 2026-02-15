@@ -32,6 +32,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.ai.edge.gallery.R
 import com.google.ai.edge.gallery.data.Model
+import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 
 /**
  * The main screen for the AI Remote Control task.
@@ -46,6 +49,7 @@ import com.google.ai.edge.gallery.data.Model
 @Composable
 fun RemoteControlScreen(
   model: Model,
+  modelManagerViewModel: ModelManagerViewModel,
   viewModel: RemoteControlViewModel = hiltViewModel(),
 ) {
   val context = LocalContext.current
@@ -92,7 +96,8 @@ fun RemoteControlScreen(
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    val modelInitialized = model.instance != null
+    val modelManagerUiState by modelManagerViewModel.uiState.collectAsState()
+    val modelInitialized = modelManagerUiState.isModelInitialized(model)
     if (!modelInitialized) {
       Text("Please wait for the model to initialize...", color = MaterialTheme.colorScheme.error)
       Spacer(modifier = Modifier.height(8.dp))

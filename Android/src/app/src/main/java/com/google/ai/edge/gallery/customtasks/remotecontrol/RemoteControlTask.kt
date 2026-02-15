@@ -91,6 +91,6 @@ class RemoteControlTask @Inject constructor() : CustomTask {
     val customTaskData = data as CustomTaskData
     val modelManagerUiState by customTaskData.modelManagerViewModel.uiState.collectAsState()
     val model = modelManagerUiState.selectedModel
-    RemoteControlScreen(model = model)
+    RemoteControlScreen(model = model, modelManagerViewModel = customTaskData.modelManagerViewModel)
   }
 }

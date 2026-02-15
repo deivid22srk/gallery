@@ -785,9 +785,19 @@ constructor(
             continue
           }
 
-          val model = allowedModel.toModel()
+          val taskTypes = allowedModel.taskTypes.toMutableList()
+          if (allowedModel.llmSupportImage == true &&
+            !taskTypes.contains(BuiltInTaskId.LLM_REMOTE_CONTROL)
+          ) {
+            taskTypes.add(BuiltInTaskId.LLM_REMOTE_CONTROL)
+          }
+
+          val model = allowedModel.toModel(
+            supportRemoteControl = taskTypes.contains(BuiltInTaskId.LLM_REMOTE_CONTROL)
+          )
           nameToModel.put(model.name, model)
-          for (taskType in allowedModel.taskTypes) {
+
+          for (taskType in taskTypes) {
             val task = curTasks.find { it.id == taskType }
             task?.models?.add(model)
 
