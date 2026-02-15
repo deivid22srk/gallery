@@ -120,6 +120,14 @@
   <string name="snackbar_no_function_call" translatable="false">No function recognized</string>
   <string name="unknown_error" translatable="false">Unknown error</string>
 
+  <string name="remote_control_title" translatable="false">AI Remote Control</string>
+  <string name="remote_control_description" translatable="false">Allow AI to control your phone via gestures and screen sharing.</string>
+  <string name="remote_control_enable_accessibility" translatable="false">1. Enable Accessibility Service</string>
+  <string name="remote_control_grant_overlay" translatable="false">2. Grant Overlay Permission</string>
+  <string name="remote_control_start" translatable="false">3. Start Remote Control Mode</string>
+  <string name="remote_control_stop" translatable="false">Stop Remote Control Mode</string>
+  <string name="remote_control_intro" translatable="false">This feature allows the AI to see your screen and perform actions like clicking, swiping, and scrolling.</string>
+
   <plurals name="parameter" translatable="false">
     <item quantity="one">Parameter</item>
     <item quantity="other">Parameters</item>
