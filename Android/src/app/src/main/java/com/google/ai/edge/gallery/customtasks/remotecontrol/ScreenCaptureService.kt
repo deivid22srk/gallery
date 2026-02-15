@@ -56,12 +56,14 @@ class ScreenCaptureService : Service() {
     suspend fun captureScreenshot(): Bitmap? {
       val service = instance ?: return lastScreenshot
 
+      Log.d(TAG, "Hiding UI for capture")
       // Hide floating UI
       RemoteControlOverlayService.setVisible(false)
-      delay(300) // Give UI more time to hide
+      delay(500) // Give UI more time to hide and system to redraw
 
       val screenshot = service.performSingleCapture()
 
+      Log.d(TAG, "Showing UI after capture")
       // Show floating UI
       RemoteControlOverlayService.setVisible(true)
 
@@ -108,7 +110,7 @@ class ScreenCaptureService : Service() {
     val proj = projection ?: return null
     val metrics = resources.displayMetrics
 
-    // Use half resolution to keep it "pequeno" (small) and faster to process.
+    // Use half resolution for performance.
     val scale = 0.5f
     val width = (metrics.widthPixels * scale).toInt()
     val height = (metrics.heightPixels * scale).toInt()
@@ -157,7 +159,7 @@ class ScreenCaptureService : Service() {
         handler
       )
 
-      return withTimeoutOrNull(2000) {
+      return withTimeoutOrNull(3000) {
         deferred.await()
       }
     } finally {

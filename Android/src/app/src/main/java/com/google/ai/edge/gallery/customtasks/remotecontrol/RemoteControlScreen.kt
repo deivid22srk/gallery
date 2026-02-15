@@ -71,9 +71,15 @@ fun RemoteControlScreen(
     }
 
   Column(modifier = Modifier.padding(16.dp)) {
-    Text(stringResource(R.string.remote_control_title))
+    Text(stringResource(R.string.remote_control_title), style = MaterialTheme.typography.titleLarge)
     Spacer(modifier = Modifier.height(16.dp))
     Text(stringResource(R.string.remote_control_intro))
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+      "Note: Screen recording permission is required to allow the local AI to \"see\" and analyze the screen. Your data stays on your device.",
+      style = MaterialTheme.typography.bodySmall,
+      color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
     Spacer(modifier = Modifier.height(16.dp))
 
     Button(onClick = {

@@ -32,7 +32,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * A shared engine to handle AI inference for remote control, independent of UI lifecycle.
@@ -74,9 +73,13 @@ object RemoteControlAIEngine {
         val screenshot = ScreenCaptureService.captureScreenshot()
 
         val contents = mutableListOf<Content>()
-        screenshot?.let { contents.add(Content.ImageBytes(it.toJpegByteArray())) }
+        screenshot?.let {
+          Log.d(TAG, "Adding screenshot to contents")
+          contents.add(Content.ImageBytes(it.toPngByteArray()))
+        }
 
         if (prompt.trim().isNotEmpty()) {
+          Log.d(TAG, "Adding text to contents: $prompt")
           contents.add(Content.Text(prompt))
         }
 
@@ -96,14 +99,15 @@ object RemoteControlAIEngine {
             Log.e(TAG, "Inference failed", it)
             _response.value = "Error: ${it.message}"
           }
-          .onCompletion { _processing.value = false }
+          .onCompletion {
+            _processing.value = false
+            Log.d(TAG, "Inference completed")
+          }
           .collect { chunk ->
-            // Ensure we extract the text correctly.
             val text = chunk.toString()
             if (text.isNotEmpty()) {
               fullResponse += text
               _response.value = fullResponse
-              Log.d(TAG, "Model response chunk: $text")
             }
           }
       } catch (e: Exception) {
@@ -116,9 +120,10 @@ object RemoteControlAIEngine {
     }
   }
 
-  private fun Bitmap.toJpegByteArray(): ByteArray {
+  private fun Bitmap.toPngByteArray(): ByteArray {
     val stream = ByteArrayOutputStream()
-    this.compress(Bitmap.CompressFormat.JPEG, 80, stream)
+    // PNG is safer than JPEG for some models/SDK versions in this project.
+    this.compress(Bitmap.CompressFormat.PNG, 100, stream)
     return stream.toByteArray()
   }
 }

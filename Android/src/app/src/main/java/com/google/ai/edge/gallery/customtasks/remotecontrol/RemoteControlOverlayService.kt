@@ -24,31 +24,77 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.os.IBinder
+import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.TextView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInteropFilter
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.google.ai.edge.gallery.ui.theme.GalleryTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /**
- * A service that displays a draggable floating overlay button and visualizes AI gestures.
- * The overlay is invisible to screen recordings.
+ * A service that displays a Material You floating overlay for AI interaction
+ * and visualizes AI gestures.
  */
-class RemoteControlOverlayService : Service() {
+class RemoteControlOverlayService : Service(), LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
   companion object {
+    private const val TAG = "AGRCOverlayService"
     private var instance: RemoteControlOverlayService? = null
 
     fun setVisible(visible: Boolean) {
@@ -65,151 +111,236 @@ class RemoteControlOverlayService : Service() {
   }
 
   private lateinit var windowManager: WindowManager
-  private var floatingView: View? = null
+  private var floatingComposeView: ComposeView? = null
   private var gestureView: GestureVisualizationView? = null
-  private var isExpanded = false
   private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+
+  // Lifecycle members
+  private val lifecycleRegistry = LifecycleRegistry(this)
+  override val lifecycle: Lifecycle get() = lifecycleRegistry
+  private val _viewModelStore = ViewModelStore()
+  override val viewModelStore: ViewModelStore get() = _viewModelStore
+  private val savedStateRegistryController = SavedStateRegistryController.create(this)
+  override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
 
   override fun onCreate() {
     super.onCreate()
     instance = this
     windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+
+    lifecycleRegistry.currentState = Lifecycle.State.CREATED
+    savedStateRegistryController.performRestore(null)
+
     showFloatingButton()
     showGestureOverlay()
   }
 
-  private fun updateVisibility(visible: Boolean) {
-    floatingView?.visibility = if (visible) View.VISIBLE else View.GONE
-    // We keep gesture overlay visible but empty most of the time.
+  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    lifecycleRegistry.currentState = Lifecycle.State.STARTED
+    return super.onStartCommand(intent, flags, startId)
   }
 
+  private fun updateVisibility(visible: Boolean) {
+    serviceScope.launch {
+      floatingComposeView?.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+  }
+
+  @OptIn(ExperimentalComposeUiApi::class)
   @SuppressLint("ClickableViewAccessibility")
   private fun showFloatingButton() {
-    val params =
-      WindowManager.LayoutParams(
-        WindowManager.LayoutParams.WRAP_CONTENT,
-        WindowManager.LayoutParams.WRAP_CONTENT,
-        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_SECURE,
-        PixelFormat.TRANSLUCENT,
-      )
-
-    params.gravity = Gravity.TOP or Gravity.START
-    params.x = 100
-    params.y = 200
-
-    val mainLayout = LinearLayout(this).apply {
-      orientation = LinearLayout.VERTICAL
-      val shape = GradientDrawable().apply {
-        shape = GradientDrawable.RECTANGLE
-        cornerRadius = 40f
-        setColor(Color.parseColor("#CC000000"))
-      }
-      background = shape
-      setPadding(16, 16, 16, 16)
+    val params = WindowManager.LayoutParams(
+      WindowManager.LayoutParams.WRAP_CONTENT,
+      WindowManager.LayoutParams.WRAP_CONTENT,
+      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_SECURE,
+      PixelFormat.TRANSLUCENT
+    ).apply {
+      gravity = Gravity.TOP or Gravity.START
+      x = 100
+      y = 200
     }
 
-    val aiButton = Button(this).apply {
-      text = "AI"
-      setBackgroundColor(Color.parseColor("#4285F4"))
-      setTextColor(Color.WHITE)
-    }
-    mainLayout.addView(aiButton)
+    floatingComposeView = ComposeView(this).apply {
+      setViewTreeLifecycleOwner(this@RemoteControlOverlayService)
+      setViewTreeSavedStateRegistryOwner(this@RemoteControlOverlayService)
+      setViewTreeViewModelStoreOwner(this@RemoteControlOverlayService)
 
-    val expandedLayout = LinearLayout(this).apply {
-      orientation = LinearLayout.VERTICAL
-      visibility = View.GONE
-    }
-
-    val responseText = TextView(this).apply {
-      setTextColor(Color.WHITE)
-      textSize = 14f
-      setPadding(0, 16, 0, 16)
-      text = "Ready"
-    }
-    expandedLayout.addView(responseText)
-
-    val inputLayout = LinearLayout(this).apply {
-      orientation = LinearLayout.HORIZONTAL
-    }
-
-    val editText = EditText(this).apply {
-      hint = "Ask AI..."
-      setHintTextColor(Color.LTGRAY)
-      setTextColor(Color.WHITE)
-      layoutParams = LinearLayout.LayoutParams(400, LinearLayout.LayoutParams.WRAP_CONTENT)
-    }
-    inputLayout.addView(editText)
-
-    val sendButton = Button(this).apply {
-      text = "Go"
-    }
-    inputLayout.addView(sendButton)
-
-    expandedLayout.addView(inputLayout)
-    mainLayout.addView(expandedLayout)
-
-    // Make it draggable
-    aiButton.setOnTouchListener(object : View.OnTouchListener {
-      private var initialX: Int = 0
-      private var initialY: Int = 0
-      private var initialTouchX: Float = 0f
-      private var initialTouchY: Float = 0f
-
-      override fun onTouch(v: View, event: MotionEvent): Boolean {
-        when (event.action) {
-          MotionEvent.ACTION_DOWN -> {
-            initialX = params.x
-            initialY = params.y
-            initialTouchX = event.rawX
-            initialTouchY = event.rawY
-            return true
-          }
-          MotionEvent.ACTION_MOVE -> {
-            params.x = initialX + (event.rawX - initialTouchX).toInt()
-            params.y = initialY + (event.rawY - initialTouchY).toInt()
-            windowManager.updateViewLayout(mainLayout, params)
-            return true
-          }
-          MotionEvent.ACTION_UP -> {
-            if (abs(event.rawX - initialTouchX) < 10 && abs(event.rawY - initialTouchY) < 10) {
-              v.performClick()
+      setContent {
+        GalleryTheme {
+          FloatingUI(
+            onToggleFocus = { focused ->
+              if (focused) {
+                params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+              } else {
+                params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+              }
+              try {
+                windowManager.updateViewLayout(this@apply, params)
+              } catch (e: Exception) {
+                Log.e(TAG, "Failed to update layout", e)
+              }
+            },
+            onDrag = { dx, dy ->
+              params.x += dx.toInt()
+              params.y += dy.toInt()
+              try {
+                windowManager.updateViewLayout(this@apply, params)
+              } catch (e: Exception) {
+                Log.e(TAG, "Failed to update layout during drag", e)
+              }
             }
-            return true
+          )
+        }
+      }
+    }
+
+    windowManager.addView(floatingComposeView, params)
+  }
+
+  @OptIn(ExperimentalComposeUiApi::class)
+  @Composable
+  private fun FloatingUI(onToggleFocus: (Boolean) -> Unit, onDrag: (Float, Float) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val response by RemoteControlAIEngine.response.collectAsState()
+    val processing by RemoteControlAIEngine.processing.collectAsState()
+    var promptText by remember { mutableStateOf("") }
+
+    Card(
+      shape = RoundedCornerShape(24.dp),
+      colors = CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.95f)
+      ),
+      elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+      modifier = Modifier.widthIn(max = 300.dp)
+    ) {
+      Column(modifier = Modifier.padding(8.dp)) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          // Draggable AI Icon
+          Surface(
+            shape = CircleShape,
+            color = if (processing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
+            modifier = Modifier
+              .size(48.dp)
+              .clip(CircleShape)
+              .setOnDragListener(onDrag) {
+                expanded = !expanded
+                onToggleFocus(expanded)
+              }
+          ) {
+            Icon(
+              Icons.Default.SmartToy,
+              contentDescription = "AI",
+              modifier = Modifier.padding(12.dp),
+              tint = if (processing) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
+            )
+          }
+
+          if (expanded) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = if (processing) "Thinking..." else "AI Remote",
+              style = MaterialTheme.typography.titleMedium,
+              color = MaterialTheme.colorScheme.onSurface
+            )
           }
         }
-        return false
-      }
-    })
 
-    aiButton.setOnClickListener {
-      isExpanded = !isExpanded
-      if (isExpanded) {
-        expandedLayout.visibility = View.VISIBLE
-        params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
-      } else {
-        expandedLayout.visibility = View.GONE
-        params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        if (expanded) {
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // Response area
+          Surface(
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Text(
+              text = response.ifEmpty { "Waiting for command..." },
+              style = MaterialTheme.typography.bodyMedium,
+              color = if (response.startsWith("Error") || response.startsWith("Fatal"))
+                        MaterialTheme.colorScheme.error
+                      else MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(12.dp),
+              fontSize = 13.sp
+            )
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // Input area
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+              value = promptText,
+              onValueChange = { promptText = it },
+              placeholder = { Text("Ask AI...", fontSize = 14.sp) },
+              modifier = Modifier.weight(1f),
+              shape = RoundedCornerShape(16.dp),
+              singleLine = true,
+              enabled = !processing
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            IconButton(
+              onClick = {
+                if (promptText.isNotBlank()) {
+                  RemoteControlAIEngine.processPrompt(promptText)
+                  promptText = ""
+                }
+              },
+              enabled = !processing && promptText.isNotBlank(),
+              modifier = Modifier
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
+                .size(40.dp)
+            ) {
+              Icon(
+                Icons.AutoMirrored.Default.Send,
+                contentDescription = "Send",
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(20.dp)
+              )
+            }
+          }
+          Spacer(modifier = Modifier.height(4.dp))
+        }
       }
-      windowManager.updateViewLayout(mainLayout, params)
     }
+  }
 
-    sendButton.setOnClickListener {
-      val prompt = editText.text.toString()
-      if (prompt.isNotEmpty()) {
-        RemoteControlAIEngine.processPrompt(prompt)
-        editText.setText("")
+  @OptIn(ExperimentalComposeUiApi::class)
+  private fun Modifier.setOnDragListener(onDrag: (Float, Float) -> Unit, onClick: () -> Unit): Modifier {
+    var initialX = 0f
+    var initialY = 0f
+    var isDragging = false
+
+    return this.pointerInteropFilter { event ->
+      when (event.action) {
+        MotionEvent.ACTION_DOWN -> {
+          initialX = event.rawX
+          initialY = event.rawY
+          isDragging = false
+          true
+        }
+        MotionEvent.ACTION_MOVE -> {
+          val dx = event.rawX - initialX
+          val dy = event.rawY - initialY
+          if (abs(dx) > 10 || abs(dy) > 10) {
+            onDrag(dx, dy)
+            initialX = event.rawX
+            initialY = event.rawY
+            isDragging = true
+          }
+          true
+        }
+        MotionEvent.ACTION_UP -> {
+          if (!isDragging) onClick()
+          true
+        }
+        else -> false
       }
     }
-
-    serviceScope.launch {
-      RemoteControlAIEngine.response.collect { response ->
-        responseText.text = response
-      }
-    }
-
-    floatingView = mainLayout
-    windowManager.addView(mainLayout, params)
   }
 
   private fun showGestureOverlay() {
@@ -243,9 +374,10 @@ class RemoteControlOverlayService : Service() {
 
   override fun onDestroy() {
     super.onDestroy()
+    lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
     instance = null
     serviceScope.cancel()
-    if (floatingView != null) windowManager.removeView(floatingView)
+    if (floatingComposeView != null) windowManager.removeView(floatingComposeView)
     if (gestureView != null) windowManager.removeView(gestureView)
   }
 
@@ -265,7 +397,7 @@ class RemoteControlOverlayService : Service() {
     }
 
     private var clickPoint: Pair<Float, Float>? = null
-    private var swipeLine: Triple<Pair<Float, Float>, Pair<Float, Float>, Float>? = null
+    private var swipeLine: Pair<Pair<Float, Float>, Pair<Float, Float>>? = null
 
     fun addClick(x: Float, y: Float) {
       clickPoint = x to y
@@ -277,7 +409,7 @@ class RemoteControlOverlayService : Service() {
     }
 
     fun addSwipe(x1: Float, y1: Float, x2: Float, y2: Float) {
-      swipeLine = Triple(x1 to y1, x2 to y2, 0f)
+      swipeLine = (x1 to y1) to (x2 to y2)
       invalidate()
       postDelayed({
         swipeLine = null
@@ -291,7 +423,7 @@ class RemoteControlOverlayService : Service() {
         canvas.drawCircle(x, y, 50f, fillPaint)
         canvas.drawCircle(x, y, 50f, paint)
       }
-      swipeLine?.let { (start, end, _) ->
+      swipeLine?.let { (start, end) ->
         canvas.drawLine(start.first, start.second, end.first, end.second, paint)
         canvas.drawCircle(start.first, start.second, 20f, fillPaint)
         canvas.drawCircle(end.first, end.second, 30f, paint)
