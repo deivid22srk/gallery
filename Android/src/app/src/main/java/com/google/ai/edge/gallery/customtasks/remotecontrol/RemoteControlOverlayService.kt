@@ -50,11 +50,10 @@ class RemoteControlOverlayService : android.app.Service(), LifecycleOwner, ViewM
   private var visualizationView: GestureVisualizationView? = null
 
   private val lifecycleRegistry = LifecycleRegistry(this)
-  private val viewModelStore = ViewModelStore()
+  override val viewModelStore = ViewModelStore()
   private val savedStateRegistryController = SavedStateRegistryController.create(this)
 
   override val lifecycle: Lifecycle get() = lifecycleRegistry
-  override fun getViewModelStore(): ViewModelStore = viewModelStore
   override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
 
   companion object {

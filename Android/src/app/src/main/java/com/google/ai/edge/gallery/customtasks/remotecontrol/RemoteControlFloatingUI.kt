@@ -116,8 +116,9 @@ fun RemoteControlFloatingUI(
                     modifier = Modifier
                         .fillMaxWidth(0.8f)
                         .padding(8.dp),
-                    colors = TextFieldDefaults.textFieldColors(
-                        containerColor = Color.Transparent
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
                     ),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = {
