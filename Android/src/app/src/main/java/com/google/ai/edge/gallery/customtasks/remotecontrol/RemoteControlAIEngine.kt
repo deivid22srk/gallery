@@ -43,6 +43,9 @@ object RemoteControlAIEngine {
   private val _processing = MutableStateFlow(false)
   val processing = _processing.asStateFlow()
 
+  private val _response = MutableStateFlow("")
+  val response = _response.asStateFlow()
+
   /** Initializes the engine with the selected model. */
   fun initialize(model: Model) {
     currentModel = model
@@ -66,11 +69,21 @@ object RemoteControlAIEngine {
         contents.add(Content.Text(prompt))
       }
 
+      _response.value = "Thinking..."
+      var fullResponse = ""
+
       instance.conversation
         .sendMessageAsync(Contents.of(contents))
-        .catch { Log.e(TAG, "Inference failed", it) }
+        .catch {
+          Log.e(TAG, "Inference failed", it)
+          _response.value = "Error: ${it.message}"
+        }
         .onCompletion { _processing.value = false }
-        .collect { Log.d(TAG, "Model response: $it") }
+        .collect {
+          fullResponse += it.toString()
+          _response.value = fullResponse
+          Log.d(TAG, "Model response: $it")
+        }
     }
   }
 

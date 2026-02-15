@@ -19,7 +19,9 @@ package com.google.ai.edge.gallery.customtasks.remotecontrol
 import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.os.IBinder
 import android.view.Gravity
 import android.view.MotionEvent
@@ -28,16 +30,24 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.TextView
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 /**
  * A service that displays a draggable floating overlay button and prompt input.
+ * The overlay is invisible to screen recordings.
  */
 class FloatingControlService : Service() {
 
   private lateinit var windowManager: WindowManager
   private var floatingView: View? = null
   private var isExpanded = false
+  private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
 
   override fun onCreate() {
     super.onCreate()
@@ -52,41 +62,67 @@ class FloatingControlService : Service() {
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_SECURE,
         PixelFormat.TRANSLUCENT,
       )
 
     params.gravity = Gravity.TOP or Gravity.START
     params.x = 100
-    params.y = 100
+    params.y = 200
 
-    val layout = LinearLayout(this)
-    layout.orientation = LinearLayout.VERTICAL
-    layout.setBackgroundColor(0xBB000000.toInt())
-    layout.setPadding(8, 8, 8, 8)
+    val mainLayout = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      val shape = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        cornerRadius = 40f
+        setColor(Color.parseColor("#CC000000"))
+      }
+      background = shape
+      setPadding(16, 16, 16, 16)
+    }
 
-    val button = Button(this)
-    button.text = "AI"
-    layout.addView(button)
+    val aiButton = Button(this).apply {
+      text = "AI"
+      setBackgroundColor(Color.parseColor("#4285F4"))
+      setTextColor(Color.WHITE)
+    }
+    mainLayout.addView(aiButton)
 
-    val promptLayout = LinearLayout(this)
-    promptLayout.orientation = LinearLayout.HORIZONTAL
-    promptLayout.visibility = View.GONE
+    val expandedLayout = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      visibility = View.GONE
+    }
 
-    val editText = EditText(this)
-    editText.hint = "Enter prompt..."
-    editText.layoutParams =
-      LinearLayout.LayoutParams(300, LinearLayout.LayoutParams.WRAP_CONTENT)
-    promptLayout.addView(editText)
+    val responseText = TextView(this).apply {
+      setTextColor(Color.WHITE)
+      textSize = 14f
+      setPadding(0, 16, 0, 16)
+      text = "Ready"
+    }
+    expandedLayout.addView(responseText)
 
-    val sendButton = Button(this)
-    sendButton.text = "Send"
-    promptLayout.addView(sendButton)
+    val inputLayout = LinearLayout(this).apply {
+      orientation = LinearLayout.HORIZONTAL
+    }
 
-    layout.addView(promptLayout)
+    val editText = EditText(this).apply {
+      hint = "Ask AI to do something..."
+      setHintTextColor(Color.LTGRAY)
+      setTextColor(Color.WHITE)
+      layoutParams = LinearLayout.LayoutParams(400, LinearLayout.LayoutParams.WRAP_CONTENT)
+    }
+    inputLayout.addView(editText)
+
+    val sendButton = Button(this).apply {
+      text = "Go"
+    }
+    inputLayout.addView(sendButton)
+
+    expandedLayout.addView(inputLayout)
+    mainLayout.addView(expandedLayout)
 
     // Make it draggable
-    button.setOnTouchListener(object : View.OnTouchListener {
+    aiButton.setOnTouchListener(object : View.OnTouchListener {
       private var initialX: Int = 0
       private var initialY: Int = 0
       private var initialTouchX: Float = 0f
@@ -104,7 +140,7 @@ class FloatingControlService : Service() {
           MotionEvent.ACTION_MOVE -> {
             params.x = initialX + (event.rawX - initialTouchX).toInt()
             params.y = initialY + (event.rawY - initialTouchY).toInt()
-            windowManager.updateViewLayout(layout, params)
+            windowManager.updateViewLayout(mainLayout, params)
             return true
           }
           MotionEvent.ACTION_UP -> {
@@ -118,38 +154,43 @@ class FloatingControlService : Service() {
       }
     })
 
-    button.setOnClickListener {
+    aiButton.setOnClickListener {
       isExpanded = !isExpanded
       if (isExpanded) {
-        promptLayout.visibility = View.VISIBLE
+        expandedLayout.visibility = View.VISIBLE
         params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
       } else {
-        promptLayout.visibility = View.GONE
+        expandedLayout.visibility = View.GONE
         params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
       }
-      windowManager.updateViewLayout(layout, params)
+      windowManager.updateViewLayout(mainLayout, params)
     }
 
     sendButton.setOnClickListener {
       val prompt = editText.text.toString()
       if (prompt.isNotEmpty()) {
-        android.util.Log.d("AGRCFloating", "Sending prompt to AI engine: $prompt")
         RemoteControlAIEngine.processPrompt(prompt)
         editText.setText("")
-
-        // Auto-collapse after sending
-        button.performClick()
+        // Keep expanded to see the response
       }
     }
 
-    floatingView = layout
-    windowManager.addView(layout, params)
+    // Collect AI responses
+    serviceScope.launch {
+      RemoteControlAIEngine.response.collect { response ->
+        responseText.text = response
+      }
+    }
+
+    floatingView = mainLayout
+    windowManager.addView(mainLayout, params)
   }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onDestroy() {
     super.onDestroy()
+    serviceScope.cancel()
     if (floatingView != null) {
       windowManager.removeView(floatingView)
     }

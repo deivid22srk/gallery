@@ -65,15 +65,16 @@ class ScreenCaptureService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     Log.d(TAG, "Starting ScreenCaptureService")
+
+    // Call startForeground immediately to avoid ForegroundServiceDidNotStartInTimeException
+    startForeground(NOTIFICATION_ID, createNotification())
+
     val resultCode = intent?.getIntExtra("resultCode", -1) ?: -1
     val resultData = intent?.getParcelableExtra<Intent>("resultData")
 
     if (resultCode != -1 && resultData != null) {
-      startForeground(NOTIFICATION_ID, createNotification())
-
       val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
       projection = mediaProjectionManager.getMediaProjection(resultCode, resultData)
-
       startCapture()
     } else {
       Log.e(TAG, "Invalid resultCode or resultData")
