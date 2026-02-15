@@ -44,6 +44,14 @@ import kotlin.math.abs
  */
 class FloatingControlService : Service() {
 
+  companion object {
+    private var instance: FloatingControlService? = null
+
+    fun setVisible(visible: Boolean) {
+      instance?.updateVisibility(visible)
+    }
+  }
+
   private lateinit var windowManager: WindowManager
   private var floatingView: View? = null
   private var isExpanded = false
@@ -51,8 +59,13 @@ class FloatingControlService : Service() {
 
   override fun onCreate() {
     super.onCreate()
+    instance = this
     windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
     showFloatingButton()
+  }
+
+  private fun updateVisibility(visible: Boolean) {
+    floatingView?.visibility = if (visible) View.VISIBLE else View.GONE
   }
 
   @SuppressLint("ClickableViewAccessibility")
@@ -190,6 +203,7 @@ class FloatingControlService : Service() {
 
   override fun onDestroy() {
     super.onDestroy()
+    instance = null
     serviceScope.cancel()
     if (floatingView != null) {
       windowManager.removeView(floatingView)

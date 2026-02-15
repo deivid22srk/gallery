@@ -60,13 +60,23 @@ object RemoteControlAIEngine {
       Log.d(TAG, "Processing prompt: $prompt")
       _processing.value = true
 
-      val contents = mutableListOf<Content>()
+      _response.value = "Capturing screen..."
 
-      // Get the latest screenshot.
-      ScreenCaptureService.lastScreenshot?.let { contents.add(Content.ImageBytes(it.toJpegByteArray())) }
+      // Capture a fresh screenshot.
+      val screenshot = ScreenCaptureService.captureScreenshot()
+
+      val contents = mutableListOf<Content>()
+      screenshot?.let { contents.add(Content.ImageBytes(it.toJpegByteArray())) }
 
       if (prompt.trim().isNotEmpty()) {
         contents.add(Content.Text(prompt))
+      }
+
+      // Safety check: Ensure we are not sending an empty list, which causes JNI crash.
+      if (contents.isEmpty()) {
+        _response.value = "Error: No content to send (screenshot failed and prompt is empty)"
+        _processing.value = false
+        return@launch
       }
 
       _response.value = "Thinking..."

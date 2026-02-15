@@ -32,6 +32,9 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * A foreground service that uses MediaProjection to capture screen frames efficiently.
@@ -42,11 +45,31 @@ class ScreenCaptureService : Service() {
     private const val TAG = "AGRCScreenCapture"
     private const val CHANNEL_ID = "screen_capture_channel"
     private const val NOTIFICATION_ID = 101
-    private const val CAPTURE_INTERVAL_MS = 500L // Capture at 2 FPS to save battery/CPU.
+
+    private var instance: ScreenCaptureService? = null
 
     @Volatile
     var lastScreenshot: Bitmap? = null
       private set
+
+    /** Captures a fresh screenshot, hiding the floating UI temporarily. */
+    suspend fun captureScreenshot(): Bitmap? {
+      val service = instance ?: return lastScreenshot
+
+      // Hide floating UI
+      FloatingControlService.setVisible(false)
+      delay(100) // Wait for UI to hide
+
+      val screenshot = service.requestSingleCapture()
+
+      // Show floating UI
+      FloatingControlService.setVisible(true)
+
+      if (screenshot != null) {
+        lastScreenshot = screenshot
+      }
+      return screenshot
+    }
   }
 
   private var projection: MediaProjection? = null
@@ -54,10 +77,11 @@ class ScreenCaptureService : Service() {
   private var virtualDisplay: VirtualDisplay? = null
   private var handlerThread: HandlerThread? = null
   private var handler: Handler? = null
-  private var lastCaptureTime = 0L
+  private var captureDeferred: CompletableDeferred<Bitmap?>? = null
 
   override fun onCreate() {
     super.onCreate()
+    instance = this
     handlerThread = HandlerThread("ScreenCaptureThread")
     handlerThread?.start()
     handler = Handler(handlerThread!!.looper)
@@ -104,15 +128,10 @@ class ScreenCaptureService : Service() {
 
     imageReader?.setOnImageAvailableListener(
       { reader ->
-        val now = System.currentTimeMillis()
-        if (now - lastCaptureTime < CAPTURE_INTERVAL_MS) {
-          reader.acquireLatestImage()?.close()
-          return@setOnImageAvailableListener
-        }
-        lastCaptureTime = now
+        val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
 
-        val image = reader.acquireLatestImage()
-        if (image != null) {
+        val deferred = captureDeferred
+        if (deferred != null) {
           try {
             val planes = image.planes
             val buffer = planes[0].buffer
@@ -129,23 +148,28 @@ class ScreenCaptureService : Service() {
             bitmap.copyPixelsFromBuffer(buffer)
 
             val croppedBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
-
-            // Thread-safe update of the last screenshot.
-            val oldBitmap = lastScreenshot
-            lastScreenshot = croppedBitmap
-            // We don't recycle oldBitmap immediately as it might be in use by the AI engine.
-            // But we should be careful about memory.
-            // In a more robust implementation, we'd use a pool or a double-buffer.
-
+            deferred.complete(croppedBitmap)
+            captureDeferred = null
           } catch (e: Exception) {
-            Log.e(TAG, "Failed to capture screenshot", e)
+            Log.e(TAG, "Failed to process screenshot", e)
+            deferred.complete(null)
           } finally {
             image.close()
           }
+        } else {
+          image.close()
         }
       },
       handler,
     )
+  }
+
+  /** Requests a single capture. */
+  private suspend fun requestSingleCapture(): Bitmap? {
+    captureDeferred = CompletableDeferred()
+    return withTimeoutOrNull(2000) {
+      captureDeferred?.await()
+    }
   }
 
   private fun createNotification(): Notification {
@@ -165,6 +189,7 @@ class ScreenCaptureService : Service() {
 
   override fun onDestroy() {
     Log.d(TAG, "Destroying ScreenCaptureService")
+    instance = null
     virtualDisplay?.release()
     imageReader?.close()
     projection?.stop()
