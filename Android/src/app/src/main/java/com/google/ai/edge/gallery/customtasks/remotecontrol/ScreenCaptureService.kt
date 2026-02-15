@@ -44,18 +44,12 @@ class ScreenCaptureService : Service() {
     private const val NOTIFICATION_ID = 101
     private const val CAPTURE_INTERVAL_MS = 500L // Capture at 2 FPS to save battery/CPU.
 
-    private var projection: MediaProjection? = null
-
     @Volatile
     var lastScreenshot: Bitmap? = null
       private set
-
-    /** Sets the MediaProjection instance to be used for capture. */
-    fun setProjection(mediaProjection: MediaProjection) {
-      projection = mediaProjection
-    }
   }
 
+  private var projection: MediaProjection? = null
   private var imageReader: ImageReader? = null
   private var virtualDisplay: VirtualDisplay? = null
   private var handlerThread: HandlerThread? = null
@@ -71,8 +65,20 @@ class ScreenCaptureService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     Log.d(TAG, "Starting ScreenCaptureService")
-    startForeground(NOTIFICATION_ID, createNotification())
-    startCapture()
+    val resultCode = intent?.getIntExtra("resultCode", -1) ?: -1
+    val resultData = intent?.getParcelableExtra<Intent>("resultData")
+
+    if (resultCode != -1 && resultData != null) {
+      startForeground(NOTIFICATION_ID, createNotification())
+
+      val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+      projection = mediaProjectionManager.getMediaProjection(resultCode, resultData)
+
+      startCapture()
+    } else {
+      Log.e(TAG, "Invalid resultCode or resultData")
+      stopSelf()
+    }
     return START_NOT_STICKY
   }
 

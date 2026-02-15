@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,10 +57,11 @@ fun RemoteControlScreen(
   val captureLauncher =
     rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
       if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-        val projection =
-          mediaProjectionManager.getMediaProjection(result.resultCode, result.data!!)
-        ScreenCaptureService.setProjection(projection)
-        context.startForegroundService(Intent(context, ScreenCaptureService::class.java))
+        val intent = Intent(context, ScreenCaptureService::class.java).apply {
+          putExtra("resultCode", result.resultCode)
+          putExtra("resultData", result.data)
+        }
+        context.startForegroundService(intent)
         context.startService(Intent(context, FloatingControlService::class.java))
       }
     }
@@ -90,9 +92,18 @@ fun RemoteControlScreen(
 
     Spacer(modifier = Modifier.height(8.dp))
 
-    Button(onClick = {
-      captureLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
-    }) {
+    val modelInitialized = model.instance != null
+    if (!modelInitialized) {
+      Text("Please wait for the model to initialize...", color = MaterialTheme.colorScheme.error)
+      Spacer(modifier = Modifier.height(8.dp))
+    }
+
+    Button(
+      onClick = {
+        captureLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+      },
+      enabled = modelInitialized
+    ) {
       Text(stringResource(R.string.remote_control_start))
     }
 
