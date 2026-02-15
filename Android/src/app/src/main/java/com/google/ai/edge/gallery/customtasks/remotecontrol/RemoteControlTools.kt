@@ -16,37 +16,50 @@
 
 package com.google.ai.edge.gallery.customtasks.remotecontrol
 
+import android.content.res.Resources
 import com.google.ai.edge.litertlm.Tool
 import com.google.ai.edge.litertlm.ToolParam
 
 /**
  * Tools that the AI can use to control the device screen.
+ * Coordinates are normalized from 0 to 100 for device independence.
  */
 class RemoteControlTools {
 
-  @Tool(description = "Clicks on the screen at the specified coordinates (x, y). Coordinates are in pixels.")
+  private fun denormalizeX(x: Float): Float {
+    return (x / 100f) * Resources.getSystem().displayMetrics.widthPixels
+  }
+
+  private fun denormalizeY(y: Float): Float {
+    return (y / 100f) * Resources.getSystem().displayMetrics.heightPixels
+  }
+
+  @Tool(description = "Clicks on the screen. Coordinates (x, y) are 0-100 (percentage of screen size).")
   fun click(
-    @ToolParam(description = "The x-coordinate in pixels.") x: Float,
-    @ToolParam(description = "The y-coordinate in pixels.") y: Float,
+    @ToolParam(description = "The x-coordinate (0-100).") x: Float,
+    @ToolParam(description = "The y-coordinate (0-100).") y: Float,
   ): Map<String, String> {
     val service = RemoteControlAccessibilityService.instance
     if (service == null) {
       return mapOf("result" to "error", "message" to "Accessibility Service not connected")
     }
 
-    // Visualize first
-    RemoteControlOverlayService.showClick(x, y)
+    val realX = denormalizeX(x)
+    val realY = denormalizeY(y)
 
-    service.click(x, y)
+    // Visualize first
+    RemoteControlOverlayService.showClick(realX, realY)
+
+    service.click(realX, realY)
     return mapOf("result" to "success", "action" to "click", "x" to x.toString(), "y" to y.toString())
   }
 
-  @Tool(description = "Swipes on the screen from (x1, y1) to (x2, y2).")
+  @Tool(description = "Swipes on the screen. Coordinates are 0-100 (percentage of screen size).")
   fun swipe(
-    @ToolParam(description = "The start x-coordinate.") x1: Float,
-    @ToolParam(description = "The start y-coordinate.") y1: Float,
-    @ToolParam(description = "The end x-coordinate.") x2: Float,
-    @ToolParam(description = "The end y-coordinate.") y2: Float,
+    @ToolParam(description = "The start x-coordinate (0-100).") x1: Float,
+    @ToolParam(description = "The start y-coordinate (0-100).") y1: Float,
+    @ToolParam(description = "The end x-coordinate (0-100).") x2: Float,
+    @ToolParam(description = "The end y-coordinate (0-100).") y2: Float,
     @ToolParam(description = "The duration of the swipe in milliseconds.") duration: Int,
   ): Map<String, String> {
     val service = RemoteControlAccessibilityService.instance
@@ -54,10 +67,15 @@ class RemoteControlTools {
       return mapOf("result" to "error", "message" to "Accessibility Service not connected")
     }
 
-    // Visualize first
-    RemoteControlOverlayService.showSwipe(x1, y1, x2, y2)
+    val rx1 = denormalizeX(x1)
+    val ry1 = denormalizeY(y1)
+    val rx2 = denormalizeX(x2)
+    val ry2 = denormalizeY(y2)
 
-    service.swipe(x1, y1, x2, y2, duration.toLong())
+    // Visualize first
+    RemoteControlOverlayService.showSwipe(rx1, ry1, rx2, ry2)
+
+    service.swipe(rx1, ry1, rx2, ry2, duration.toLong())
     return mapOf("result" to "success", "action" to "swipe")
   }
 
@@ -91,24 +109,38 @@ class RemoteControlTools {
       return mapOf("result" to "error", "message" to "Accessibility Service not connected")
     }
 
+    val width = Resources.getSystem().displayMetrics.widthPixels.toFloat()
+    val height = Resources.getSystem().displayMetrics.heightPixels.toFloat()
+
     // For simplicity, we implement scroll as a swipe in the opposite direction.
-    // Coordinates are rough estimates for visualization.
     when (direction.lowercase()) {
       "up" -> {
-        RemoteControlOverlayService.showSwipe(500f, 800f, 500f, 200f)
-        service.swipe(500f, 800f, 500f, 200f)
+        val x = width / 2
+        val y1 = height * 0.8f
+        val y2 = height * 0.2f
+        RemoteControlOverlayService.showSwipe(x, y1, x, y2)
+        service.swipe(x, y1, x, y2)
       }
       "down" -> {
-        RemoteControlOverlayService.showSwipe(500f, 200f, 500f, 800f)
-        service.swipe(500f, 200f, 500f, 800f)
+        val x = width / 2
+        val y1 = height * 0.2f
+        val y2 = height * 0.8f
+        RemoteControlOverlayService.showSwipe(x, y1, x, y2)
+        service.swipe(x, y1, x, y2)
       }
       "left" -> {
-        RemoteControlOverlayService.showSwipe(800f, 500f, 200f, 500f)
-        service.swipe(800f, 500f, 200f, 500f)
+        val y = height / 2
+        val x1 = width * 0.8f
+        val x2 = width * 0.2f
+        RemoteControlOverlayService.showSwipe(x1, y, x2, y)
+        service.swipe(x1, y, x2, y)
       }
       "right" -> {
-        RemoteControlOverlayService.showSwipe(200f, 500f, 800f, 500f)
-        service.swipe(200f, 500f, 800f, 500f)
+        val y = height / 2
+        val x1 = width * 0.2f
+        val x2 = width * 0.8f
+        RemoteControlOverlayService.showSwipe(x1, y, x2, y)
+        service.swipe(x1, y, x2, y)
       }
     }
     return mapOf("result" to "success", "action" to "scroll", "direction" to direction)

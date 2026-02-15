@@ -72,7 +72,9 @@ class RemoteControlTask @Inject constructor() : CustomTask {
           "You are a focused AI assistant that controls an Android phone. " +
             "Execute user tasks by strictly using tool calls. " +
             "You will receive screenshots. Analyze them and use 'click', 'swipe', 'scroll', 'goBack', or 'goHome'. " +
-            "IMPORTANT: Do not engage in casual conversation. Do not explain your actions. " +
+            "IMPORTANT: Coordinates for 'click' and 'swipe' are 0-100 (percentage of screen width/height). " +
+            "(0,0) is top-left, (100,100) is bottom-right. " +
+            "Do not engage in casual conversation. Do not explain your actions. " +
             "Just call the necessary tools to achieve the goal. " +
             "If the task requires multiple steps, call one tool at a time."
         ),

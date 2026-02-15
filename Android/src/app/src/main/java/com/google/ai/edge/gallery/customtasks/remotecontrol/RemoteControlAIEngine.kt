@@ -31,6 +31,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * A shared engine to handle AI inference for remote control, independent of UI lifecycle.
@@ -38,6 +40,7 @@ import kotlinx.coroutines.launch
 object RemoteControlAIEngine {
   private const val TAG = "AGRCAIEngine"
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+  private val mutex = Mutex()
 
   private var currentModel: Model? = null
   private val _processing = MutableStateFlow(false)
@@ -57,32 +60,36 @@ object RemoteControlAIEngine {
     val instance = model.instance as? LlmModelInstance ?: return
 
     scope.launch {
-      Log.d(TAG, "Processing prompt: $prompt")
-      _processing.value = true
-
-      _response.value = "Capturing screen..."
-
-      // Capture a fresh screenshot.
-      val screenshot = ScreenCaptureService.captureScreenshot()
-
-      val contents = mutableListOf<Content>()
-      screenshot?.let { contents.add(Content.ImageBytes(it.toJpegByteArray())) }
-
-      if (prompt.trim().isNotEmpty()) {
-        contents.add(Content.Text(prompt))
-      }
-
-      // Safety check: Ensure we are not sending an empty list, which causes JNI crash.
-      if (contents.isEmpty()) {
-        _response.value = "Error: No content to send (screenshot failed and prompt is empty)"
-        _processing.value = false
+      if (!mutex.tryLock()) {
+        Log.w(TAG, "Already processing. Ignoring prompt.")
         return@launch
       }
-
-      _response.value = "Thinking..."
-      var fullResponse = ""
-
       try {
+        Log.d(TAG, "Processing prompt: $prompt")
+        _processing.value = true
+
+        _response.value = "Capturing screen..."
+
+        // Capture a fresh screenshot.
+        val screenshot = ScreenCaptureService.captureScreenshot()
+
+        val contents = mutableListOf<Content>()
+        screenshot?.let { contents.add(Content.ImageBytes(it.toJpegByteArray())) }
+
+        if (prompt.trim().isNotEmpty()) {
+          contents.add(Content.Text(prompt))
+        }
+
+        // Safety check: Ensure we are not sending an empty list, which causes JNI crash.
+        if (contents.isEmpty()) {
+          _response.value = "Error: No content to send"
+          _processing.value = false
+          return@launch
+        }
+
+        _response.value = "Thinking..."
+        var fullResponse = ""
+
         instance.conversation
           .sendMessageAsync(Contents.of(contents))
           .catch {
@@ -90,15 +97,21 @@ object RemoteControlAIEngine {
             _response.value = "Error: ${it.message}"
           }
           .onCompletion { _processing.value = false }
-          .collect {
-            fullResponse += it.toString()
-            _response.value = fullResponse
-            Log.d(TAG, "Model response: $it")
+          .collect { chunk ->
+            // Ensure we extract the text correctly.
+            val text = chunk.toString()
+            if (text.isNotEmpty()) {
+              fullResponse += text
+              _response.value = fullResponse
+              Log.d(TAG, "Model response chunk: $text")
+            }
           }
       } catch (e: Exception) {
-        Log.e(TAG, "Exception during sendMessageAsync", e)
+        Log.e(TAG, "Exception during inference", e)
         _response.value = "Fatal Error: ${e.message}"
         _processing.value = false
+      } finally {
+        mutex.unlock()
       }
     }
   }

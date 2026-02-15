@@ -219,7 +219,6 @@ class RemoteControlOverlayService : Service() {
       WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
       WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
       WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-      WindowManager.LayoutParams.FLAG_SECURE or
       WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
       PixelFormat.TRANSLUCENT
     )
@@ -253,14 +252,14 @@ class RemoteControlOverlayService : Service() {
   /** View to draw temporary gesture visualizations. */
   private class GestureVisualizationView(context: Context) : View(context) {
     private val paint = Paint().apply {
-      color = Color.parseColor("#80FF0000") // Semi-transparent red
+      color = Color.parseColor("#8000FBFF") // Semi-transparent cyan
       style = Paint.Style.STROKE
-      strokeWidth = 10f
+      strokeWidth = 8f
       isAntiAlias = true
     }
 
     private val fillPaint = Paint().apply {
-      color = Color.parseColor("#40FF0000") // More transparent red
+      color = Color.parseColor("#3000FBFF") // More transparent cyan
       style = Paint.Style.FILL
       isAntiAlias = true
     }

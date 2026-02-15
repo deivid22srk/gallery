@@ -58,7 +58,7 @@ class ScreenCaptureService : Service() {
 
       // Hide floating UI
       RemoteControlOverlayService.setVisible(false)
-      delay(200) // Give UI time to hide
+      delay(300) // Give UI more time to hide
 
       val screenshot = service.performSingleCapture()
 
