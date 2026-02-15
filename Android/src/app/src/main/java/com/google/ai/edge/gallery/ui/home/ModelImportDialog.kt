@@ -127,6 +127,7 @@ private val IMPORT_CONFIGS_LLM: List<Config> =
     BooleanSwitchConfig(key = ConfigKeys.SUPPORT_AUDIO, defaultValue = false),
     BooleanSwitchConfig(key = ConfigKeys.SUPPORT_TINY_GARDEN, defaultValue = false),
     BooleanSwitchConfig(key = ConfigKeys.SUPPORT_MOBILE_ACTIONS, defaultValue = false),
+    BooleanSwitchConfig(key = ConfigKeys.SUPPORT_REMOTE_CONTROL, defaultValue = false),
     SegmentedButtonConfig(
       key = ConfigKeys.COMPATIBLE_ACCELERATORS,
       defaultValue = Accelerator.CPU.label,
@@ -263,6 +264,12 @@ fun ModelImportDialog(
                   valueType = ValueType.BOOLEAN,
                 )
                   as Boolean
+              val supportRemoteControl =
+                convertValueToTargetType(
+                  value = values.get(ConfigKeys.SUPPORT_REMOTE_CONTROL.label)!!,
+                  valueType = ValueType.BOOLEAN,
+                )
+                  as Boolean
               val importedModel: ImportedModel =
                 ImportedModel.newBuilder()
                   .setFileName(fileName)
@@ -278,6 +285,7 @@ fun ModelImportDialog(
                       .setSupportAudio(supportAudio)
                       .setSupportMobileActions(supportMobileActions)
                       .setSupportTinyGarden(supportTinyGarden)
+                      .setSupportRemoteControl(supportRemoteControl)
                       .build()
                   )
                   .build()

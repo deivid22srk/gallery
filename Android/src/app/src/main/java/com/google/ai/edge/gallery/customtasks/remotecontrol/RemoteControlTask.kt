@@ -1,0 +1,79 @@
+/*
+ * Copyright 2025 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.google.ai.edge.gallery.customtasks.remotecontrol
+
+import android.content.Context
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.TouchApp
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.google.ai.edge.gallery.customtasks.common.CustomTask
+import com.google.ai.edge.gallery.customtasks.common.CustomTaskData
+import com.google.ai.edge.gallery.data.BuiltInTaskId
+import com.google.ai.edge.gallery.data.Category
+import com.google.ai.edge.gallery.data.Model
+import com.google.ai.edge.gallery.data.Task
+import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+
+/**
+ * A custom task that allows an AI to control the device via accessibility gestures and screen capture.
+ */
+class RemoteControlTask @Inject constructor(
+    private val aiEngine: RemoteControlAIEngine
+) : CustomTask {
+
+  override val task =
+    Task(
+      id = BuiltInTaskId.LLM_REMOTE_CONTROL,
+      label = "AI Remote Control",
+      description = "Allow AI to control your phone via gestures and screen sharing.",
+      category = Category.LLM,
+      icon = Icons.Outlined.TouchApp,
+      models = mutableListOf(),
+      experimental = true,
+    )
+
+  override fun initializeModelFn(
+    context: Context,
+    coroutineScope: CoroutineScope,
+    model: Model,
+    onDone: (String) -> Unit,
+  ) {
+    // Delegate to aiEngine to avoid double loading
+    aiEngine.setModel(model, onDone)
+  }
+
+  override fun cleanUpModelFn(
+    context: Context,
+    coroutineScope: CoroutineScope,
+    model: Model,
+    onDone: () -> Unit,
+  ) {
+    // Model cleanup handled by RemoteControlAIEngine or system
+    onDone()
+  }
+
+  @Composable
+  override fun MainScreen(data: Any) {
+    val customTaskData = data as CustomTaskData
+    val modelManagerUiState by customTaskData.modelManagerViewModel.uiState.collectAsState()
+    val model = modelManagerUiState.selectedModel
+    RemoteControlScreen(model = model, modelManagerViewModel = customTaskData.modelManagerViewModel)
+  }
+}

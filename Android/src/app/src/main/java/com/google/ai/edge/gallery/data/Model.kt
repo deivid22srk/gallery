@@ -216,6 +216,9 @@ data class Model(
   /** Whether the LLM model supports mobile actions. */
   val llmSupportMobileActions: Boolean = false,
 
+  /** Whether the LLM model supports AI remote control. */
+  val llmSupportRemoteControl: Boolean = false,
+
   /** Whether the model is imported or not. */
   val imported: Boolean = false,
 

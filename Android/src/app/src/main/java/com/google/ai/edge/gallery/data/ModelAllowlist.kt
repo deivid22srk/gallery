@@ -41,12 +41,13 @@ data class AllowedModel(
   val llmSupportAudio: Boolean? = null,
   val llmSupportTinyGarden: Boolean? = null,
   val llmSupportMobileActions: Boolean? = null,
+  val llmSupportRemoteControl: Boolean? = null,
   val minDeviceMemoryInGb: Int? = null,
   val bestForTaskTypes: List<String>? = null,
   val localModelFilePathOverride: String? = null,
   val url: String? = null,
 ) {
-  fun toModel(): Model {
+  fun toModel(supportRemoteControl: Boolean = false): Model {
     // Construct HF download url.
     val downloadUrl =
       url ?: "https://huggingface.co/$modelId/resolve/$commitHash/$modelFile?download=true"
@@ -112,6 +113,7 @@ data class AllowedModel(
       llmSupportAudio = llmSupportAudio == true,
       llmSupportTinyGarden = llmSupportTinyGarden == true,
       llmSupportMobileActions = llmSupportMobileActions == true,
+      llmSupportRemoteControl = supportRemoteControl || llmSupportRemoteControl == true,
       bestForTaskIds = bestForTaskTypes ?: listOf(),
       localModelFilePathOverride = localModelFilePathOverride ?: "",
     )
