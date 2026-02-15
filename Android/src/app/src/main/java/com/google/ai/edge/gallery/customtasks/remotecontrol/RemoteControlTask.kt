@@ -24,6 +24,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.google.ai.edge.gallery.customtasks.common.CustomTask
 import com.google.ai.edge.gallery.customtasks.common.CustomTaskData
+import com.google.ai.edge.gallery.data.BuiltInTaskId
 import com.google.ai.edge.gallery.data.Category
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.Task
@@ -40,7 +41,7 @@ class RemoteControlTask @Inject constructor() : CustomTask {
 
   override val task =
     Task(
-      id = "llm_remote_control",
+      id = BuiltInTaskId.LLM_REMOTE_CONTROL,
       label = "AI Remote Control",
       description = "Allow AI to control your phone via gestures and screen sharing.",
       category = Category.LLM,

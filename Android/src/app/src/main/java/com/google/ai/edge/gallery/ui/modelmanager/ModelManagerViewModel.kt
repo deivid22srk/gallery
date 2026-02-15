@@ -158,6 +158,7 @@ private val PREDEFINED_LLM_TASK_ORDER =
     BuiltInTaskId.LLM_PROMPT_LAB,
     BuiltInTaskId.LLM_TINY_GARDEN,
     BuiltInTaskId.LLM_MOBILE_ACTIONS,
+    BuiltInTaskId.LLM_REMOTE_CONTROL,
     BuiltInTaskId.MP_SCRAPBOOK,
   )
 
@@ -500,6 +501,7 @@ constructor(
             BuiltInTaskId.LLM_PROMPT_LAB,
             BuiltInTaskId.LLM_TINY_GARDEN,
             BuiltInTaskId.LLM_MOBILE_ACTIONS,
+            BuiltInTaskId.LLM_REMOTE_CONTROL,
           )
       )) {
       // Remove duplicated imported model if existed.
@@ -513,10 +515,12 @@ constructor(
           (task.id == BuiltInTaskId.LLM_ASK_AUDIO && model.llmSupportAudio) ||
           (task.id == BuiltInTaskId.LLM_TINY_GARDEN && model.llmSupportTinyGarden) ||
           (task.id == BuiltInTaskId.LLM_MOBILE_ACTIONS && model.llmSupportMobileActions) ||
+          (task.id == BuiltInTaskId.LLM_REMOTE_CONTROL && model.llmSupportRemoteControl) ||
           (task.id != BuiltInTaskId.LLM_ASK_IMAGE &&
             task.id != BuiltInTaskId.LLM_ASK_AUDIO &&
             task.id != BuiltInTaskId.LLM_TINY_GARDEN &&
-            task.id != BuiltInTaskId.LLM_MOBILE_ACTIONS)
+            task.id != BuiltInTaskId.LLM_MOBILE_ACTIONS &&
+            task.id != BuiltInTaskId.LLM_REMOTE_CONTROL)
       ) {
         task.models.add(model)
         if (task.id == BuiltInTaskId.LLM_TINY_GARDEN) {
@@ -947,6 +951,9 @@ constructor(
       if (model.llmSupportMobileActions) {
         tasks.get(key = BuiltInTaskId.LLM_MOBILE_ACTIONS)?.models?.add(model)
       }
+      if (model.llmSupportRemoteControl) {
+        tasks.get(key = BuiltInTaskId.LLM_REMOTE_CONTROL)?.models?.add(model)
+      }
 
       // Update status.
       modelDownloadStatus[model.name] =
@@ -992,6 +999,7 @@ constructor(
     val llmSupportAudio = info.llmConfig.supportAudio
     val llmSupportTinyGarden = info.llmConfig.supportTinyGarden
     val llmSupportMobileActions = info.llmConfig.supportMobileActions
+    val llmSupportRemoteControl = info.llmConfig.supportRemoteControl
     val model =
       Model(
         name = info.fileName,
@@ -1006,6 +1014,7 @@ constructor(
         llmSupportAudio = llmSupportAudio,
         llmSupportTinyGarden = llmSupportTinyGarden,
         llmSupportMobileActions = llmSupportMobileActions,
+        llmSupportRemoteControl = llmSupportRemoteControl,
       )
     model.preProcess()
 
